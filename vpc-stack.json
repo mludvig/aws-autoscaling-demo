@@ -1,0 +1,126 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Demo VPC Template",
+  "Parameters": {
+    "VpcCidr": {
+      "Type": "String",
+      "Description": "VPC CIDR Address",
+      "AllowedPattern": "^(?:\\d{1,3})\\.(?:\\d{1,3})\\.(?:\\d{1,3})\\.(?:\\d{1,3})/(?:\\d{1,2})$",
+      "ConstraintDescription": "IP address must be in the format x.x.x.x/xx"
+    },
+    "DemoCidr": {
+      "Type": "String",
+      "Description": "Demo block CIDR Address",
+      "AllowedPattern": "^(?:\\d{1,3})\\.(?:\\d{1,3})\\.(?:\\d{1,3})\\.(?:\\d{1,3})/(?:\\d{1,2})$",
+      "ConstraintDescription": "IP address must be in the format x.x.x.x/xx"
+    },
+    "DemoSubnets": {
+      "Type": "CommaDelimitedList",
+      "Description": "Demo subnet addresses for 3 Availability Zones"
+    }
+  },
+  "Resources": {
+    "Vpc": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": { "Ref": "VpcCidr" },
+        "EnableDnsHostnames": "true",
+        "Tags": [ { "Key": "Name", "Value": { "Ref": "AWS::StackName" } } ]
+      }
+    },
+    "RouteTableDemoSubnets": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": { "Ref": "Vpc" },
+        "Tags": [ { "Key": "Name", "Value":  { "Fn::Join" : ["", [ { "Ref" : "AWS::StackName" }, "-dmz" ] ] } } ]
+      }
+    },
+    "DemoSubnetAz1": {
+      "Type" : "AWS::EC2::Subnet",
+      "Properties" : {
+        "VpcId" : { "Ref" : "Vpc" },
+        "CidrBlock": { "Fn::Select": [ "0", { "Ref": "DemoSubnets" } ] },
+        "AvailabilityZone" : { "Fn::Select": [ "0", { "Fn::GetAZs": "" } ] },
+        "Tags": [ { "Key": "Name", "Value":  { "Fn::Join" : ["", [ { "Ref" : "AWS::StackName" }, "-mgmt-public-az1" ] ] } } ]
+      }
+    },
+    "DemoSubnetAz1Rta": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": { "Ref": "RouteTableDemoSubnets" },
+        "SubnetId": { "Ref": "DemoSubnetAz1" }
+      }
+    },
+    "DemoSubnetAz2": {
+      "Type" : "AWS::EC2::Subnet",
+      "Properties" : {
+        "VpcId" : { "Ref" : "Vpc" },
+        "CidrBlock": { "Fn::Select": [ "1", { "Ref": "DemoSubnets" } ] },
+        "AvailabilityZone" : { "Fn::Select": [ "1", { "Fn::GetAZs": "" } ] },
+        "Tags": [ { "Key": "Name", "Value":  { "Fn::Join" : ["", [ { "Ref" : "AWS::StackName" }, "-mgmt-public-az2" ] ] } } ]
+      }
+    },
+    "DemoSubnetAz2Rta": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": { "Ref": "RouteTableDemoSubnets" },
+        "SubnetId": { "Ref": "DemoSubnetAz2" }
+      }
+    },
+    "DemoSubnetAz3": {
+      "Type" : "AWS::EC2::Subnet",
+      "Properties" : {
+        "VpcId" : { "Ref" : "Vpc" },
+        "CidrBlock": { "Fn::Select": [ "2", { "Ref": "DemoSubnets" } ] },
+        "AvailabilityZone" : { "Fn::Select": [ "2", { "Fn::GetAZs": "" } ] },
+        "Tags": [ { "Key": "Name", "Value":  { "Fn::Join" : ["", [ { "Ref" : "AWS::StackName" }, "-mgmt-public-az3" ] ] } } ]
+      }
+    },
+    "DemoSubnetAz3Rta": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "RouteTableId": { "Ref": "RouteTableDemoSubnets" },
+        "SubnetId": { "Ref": "DemoSubnetAz3" }
+      }
+    },
+
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [ { "Key": "Name", "Value":  { "Ref" : "AWS::StackName" } } ]
+      }
+    },
+    "IgwRoute": {
+      "Type": "AWS::EC2::Route",
+      "Properties": {
+        "RouteTableId": { "Ref": "RouteTableDemoSubnets" },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": { "Ref": "InternetGateway" }
+      }
+    },
+    "VpcGatewayAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "InternetGatewayId": { "Ref": "InternetGateway" },
+        "VpcId": { "Ref": "Vpc" }
+      }
+    },
+    "S3Endpoint": {
+      "Type": "AWS::EC2::VPCEndpoint",
+      "Properties": {
+        "RouteTableIds": [
+          { "Ref": "RouteTableDemoSubnets" }
+        ],
+        "ServiceName": { "Fn::Join": [ "", [ "com.amazonaws.", { "Ref": "AWS::Region" }, ".s3" ] ] },
+        "VpcId": { "Ref": "Vpc" }
+      }
+    }
+  },
+  "Outputs": {
+    "VpcId": { "Value": { "Ref": "Vpc" } },
+    "VpcCidr": { "Value": { "Fn::GetAtt": [ "Vpc", "CidrBlock" ] } },
+    "DemoSubnets": { "Value": { "Fn::Join": [ ", ", [ { "Ref": "DemoSubnetAz1" }, { "Ref": "DemoSubnetAz2" }, { "Ref": "DemoSubnetAz3" } ] ] } }
+  }
+}
+
+
