@@ -24,9 +24,28 @@
           VpcCidr:  "{{ vpc_cidr }}"
           DemoCidr: "{{ demo_cidr }}"
           DemoSubnetsCidr: "{{ demo_subnets_cidr }}"
-      register: vpc
+      register: stack
 
     - name: Extract VPC Stack outputs
       set_fact:
-        outputs: "{{ { 'vpc': vpc.stack_outputs } }}"
+        outputs: "{{ { 'vpc': stack.stack_outputs } }}"
+
+    - name: Create App Cluster
+      cloudformation:
+        stack_name: "{{ vpc_name }}-app"
+        state: present
+        template: app-stack.json
+        template_parameters:
+          VpcId: "{{ outputs.vpc.VpcId }}"
+          AppSubnets: "{{ outputs.vpc.DemoSubnets }}"
+          AppImageId: "ami-6869aa05"
+          AppInstanceType: t2.nano
+          DnsZone: demo.e-it.nz.
+          KeyName: michael.ludvig
+          SshInCidr: 210.54.38.87/32
+      register: stack
+
+    - name: Extract VPC Stack outputs
+      set_fact:
+        outputs: "{{ outputs | combine({ 'app': stack.stack_outputs }) }}"
 
