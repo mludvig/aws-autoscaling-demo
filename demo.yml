@@ -1,0 +1,32 @@
+---
+- name: Demo VPC Playbook
+  hosts: localhost
+  connection: local
+  gather_facts: no
+  vars:
+    vpc_name: demo
+    aws_region: us-east-1
+
+    # vpc-stack.json
+    vpc_cidr: 172.22.0.0/16
+    demo_cidr: 172.22.0.0/22
+    demo_subnets_cidr: 172.22.0.0/24,172.22.1.0/24,172.22.2.0/24
+
+  environment:
+    AWS_DEFAULT_REGION: "{{aws_region}}"
+  tasks:
+    - name: Configure VPC and Subnets
+      cloudformation:
+        stack_name: "{{ vpc_name }}-vpc"
+        state: present
+        template: vpc-stack.json
+        template_parameters:
+          VpcCidr:  "{{ vpc_cidr }}"
+          DemoCidr: "{{ demo_cidr }}"
+          DemoSubnetsCidr: "{{ demo_subnets_cidr }}"
+      register: vpc
+
+    - name: Extract VPC Stack outputs
+      set_fact:
+        outputs: "{{ { 'vpc': vpc.stack_outputs } }}"
+
