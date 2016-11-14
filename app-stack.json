@@ -77,7 +77,7 @@
     "AppApplication": {
       "Type": "AWS::CodeDeploy::Application",
       "Properties": {
-        "ApplicationName": { "Fn::Join": [ "", [ { "Ref": "AWS::StackName" }, "-app" ] ] }
+        "ApplicationName": { "Ref": "AWS::StackName" }
       }
     },
     "CodeDeployRole": {
@@ -143,12 +143,12 @@
       }
     },
 
-    "AppElbSecurityGroup": {
+    "ElbSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
         "GroupDescription": "Public ELB Security Group",
         "VpcId": { "Ref": "VpcId" },
-        "Tags": [ { "Key": "Name", "Value": { "Fn::Join": ["", [ { "Ref": "AWS::StackName" }, "-app-elb" ] ] } } ],
+        "Tags": [ { "Key": "Name", "Value": { "Ref": "AWS::StackName" } } ],
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
@@ -165,11 +165,11 @@
         ]
       }
     },
-    "AppElb": {
+    "Elb": {
       "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
       "Properties": {
-        "SecurityGroups": [ { "Ref": "AppElbSecurityGroup" } ],
-        "Tags": [ { "Key": "Name", "Value": { "Fn::Join": ["", [ { "Ref": "AWS::StackName" }, "-app-elb" ] ] } } ],
+        "SecurityGroups": [ { "Ref": "ElbSecurityGroup" } ],
+        "Tags": [ { "Key": "Name", "Value": { "Ref": "AWS::StackName" } } ],
         "Subnets": { "Ref": "AppSubnets" },
         "CrossZone": "true",
         "Listeners": [
@@ -188,7 +188,7 @@
         }
       }
     },
-    "AppElbHealthyCount": {
+    "ElbHealthyCount": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
         "AlarmDescription": "Alarm if number of healthy instances is less than the minimum ASG size",
@@ -199,10 +199,10 @@
         "EvaluationPeriods": "3",
         "ComparisonOperator": "LessThanThreshold",
         "Threshold": { "Ref": "AppAsgMinSize" },
-        "Dimensions": [ { "Name": "LoadBalancerName", "Value": { "Ref": "AppElb" } } ]
+        "Dimensions": [ { "Name": "LoadBalancerName", "Value": { "Ref": "Elb" } } ]
       }
     },
-    "AppElbDns": {
+    "ElbDns": {
       "Type": "AWS::Route53::RecordSet",
       "Properties": {
         "Comment": "CNAME for App ELB",
@@ -213,8 +213,8 @@
         ] ] },
         "Type": "A",
         "AliasTarget": {
-          "HostedZoneId": { "Fn::GetAtt": [ "AppElb", "CanonicalHostedZoneNameID" ] },
-          "DNSName": { "Fn::GetAtt": [ "AppElb", "DNSName" ] }
+          "HostedZoneId": { "Fn::GetAtt": [ "Elb", "CanonicalHostedZoneNameID" ] },
+          "DNSName": { "Fn::GetAtt": [ "Elb", "DNSName" ] }
         }
       }
     },
@@ -223,13 +223,13 @@
       "Properties": {
         "GroupDescription": "App Security Group",
         "VpcId": { "Ref": "VpcId" },
-        "Tags": [ { "Key": "Name", "Value": { "Fn::Join": ["", [ { "Ref": "AWS::StackName" }, "-app-asg" ] ] } } ],
+        "Tags": [ { "Key": "Name", "Value": { "Ref": "AWS::StackName" } } ],
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
             "FromPort": { "Ref": "AppPort" },
             "ToPort": { "Ref": "AppPort" },
-            "SourceSecurityGroupId":  { "Ref": "AppElbSecurityGroup" }
+            "SourceSecurityGroupId":  { "Ref": "ElbSecurityGroup" }
           },
           {
             "IpProtocol": "tcp",
@@ -289,7 +289,7 @@
       "Type": "AWS::AutoScaling::AutoScalingGroup",
       "Properties": {
         "VPCZoneIdentifier": { "Ref": "AppSubnets" },
-        "LoadBalancerNames": [ { "Ref": "AppElb" } ],
+        "LoadBalancerNames": [ { "Ref": "Elb" } ],
         "LaunchConfigurationName": { "Ref": "AppInstanceLaunchConfig" },
         "TerminationPolicies": [ "OldestLaunchConfiguration", "OldestInstance" ],
         "HealthCheckType": "EC2",
@@ -297,7 +297,7 @@
         "Cooldown": 30,
         "MinSize": { "Ref": "AppAsgMinSize" },
         "MaxSize": { "Ref": "AppAsgMaxSize" },
-        "Tags": [ { "Key": "Name", "Value": { "Fn::Join": ["", [ { "Ref": "AWS::StackName" }, "-app" ] ] }, "PropagateAtLaunch": "true" } ]
+        "Tags": [ { "Key": "Name", "Value": { "Ref": "AWS::StackName" }, "PropagateAtLaunch": "true" } ]
       }
     },
     "AppServerScaleUpPolicy": {
@@ -392,13 +392,13 @@
 
   },
   "Outputs": {
-    "AppElbCanonicalName": {
+    "ElbCanonicalName": {
       "Description": "App ELB canonical name",
-      "Value": { "Fn::GetAtt": [ "AppElb", "DNSName" ] }
+      "Value": { "Fn::GetAtt": [ "Elb", "DNSName" ] }
     },
-    "AppElbDnsName": {
+    "ElbDnsName": {
       "Description": "App ELB DNS Name (Public URL HostName)",
-      "Value": { "Ref": "AppElbDns" }
+      "Value": { "Ref": "ElbDns" }
     },
     "AppApplication": {
       "Description": "App CodeDeploy Application Name",
