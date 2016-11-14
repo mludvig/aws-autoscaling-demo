@@ -9,8 +9,7 @@
 
     # vpc-stack.json
     vpc_cidr: 172.22.0.0/16
-    demo_cidr: 172.22.0.0/22
-    demo_subnets_cidr: 172.22.0.0/24,172.22.1.0/24,172.22.2.0/24
+    subnets_cidrs: 172.22.0.0/24,172.22.1.0/24,172.22.2.0/24
 
   environment:
     AWS_DEFAULT_REGION: "{{aws_region}}"
@@ -22,8 +21,7 @@
         template: vpc-stack.json
         template_parameters:
           VpcCidr:  "{{ vpc_cidr }}"
-          DemoCidr: "{{ demo_cidr }}"
-          DemoSubnetsCidr: "{{ demo_subnets_cidr }}"
+          SubnetsCidrs: "{{ subnets_cidrs }}"
       register: stack
 
     - name: Extract VPC Stack outputs
@@ -37,7 +35,7 @@
         template: app-stack.json
         template_parameters:
           VpcId: "{{ outputs.vpc.VpcId }}"
-          AppSubnets: "{{ outputs.vpc.DemoSubnets }}"
+          AppSubnets: "{{ outputs.vpc.Subnets }}"
           AppImageId: "ami-6869aa05"
           AppInstanceType: t2.nano
           DnsZone: demo.e-it.nz.
