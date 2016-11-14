@@ -23,10 +23,6 @@
       "Description": "Type of instance health check, e.g. 'HTTP:80/' or 'TCP:80'",
       "Default": "HTTP:80/"
     },
-    "AppImageId": {
-      "Type": "AWS::EC2::Image::Id",
-      "Description": "AMI Id to use for App instances"
-    },
     "AppInstanceType": {
       "Type": "String",
       "Description": "ECS EC2 instance type",
@@ -59,6 +55,22 @@
     "SshInCidr": {
       "Type": "String",
       "Description": "Subnet CIDR whose members have SSH access to our instances, usually Bastion Host"
+    }
+  },
+  "Mappings": {
+    "RegionToAmi": {
+      "us-east-1": { "hvm": "ami-b73b63a0" },
+      "us-east-2": { "hvm": "ami-58277d3d" },
+      "us-west-1": { "hvm": "ami-23e8a343" },
+      "us-west-2": { "hvm": "ami-5ec1673e" },
+      "ap-south-1": { "hvm": "ami-34b4c05b" },
+      "ap-northeast-2": { "hvm": "ami-983ce8f6" },
+      "ap-southeast-1": { "hvm": "ami-b953f2da" },
+      "ap-southeast-2": { "hvm": "ami-db704cb8" },
+      "ap-northeast-1": { "hvm": "ami-0c11b26d" },
+      "eu-central-1": { "hvm": "ami-f9619996" },
+      "eu-west-1": { "hvm": "ami-9398d3e0" },
+      "sa-east-1": { "hvm": "ami-97831ffb" }
     }
   },
   "Resources": {
@@ -237,17 +249,8 @@
     "AppInstanceLaunchConfig": {
       "Type": "AWS::AutoScaling::LaunchConfiguration",
       "Properties": {
-        "ImageId": { "Ref": "AppImageId" },
+        "ImageId": { "Fn::FindInMap" : [ "RegionToAmi", { "Ref" : "AWS::Region" }, "hvm"]},
         "InstanceType": { "Ref": "AppInstanceType" },
-        "BlockDeviceMappings": [
-          {
-            "DeviceName": "/dev/sda1",
-            "Ebs": {
-              "VolumeType": "gp2",
-              "DeleteOnTermination": "true"
-            }
-          }
-        ],
         "IamInstanceProfile": { "Ref": "AppInstanceProfile" },
         "KeyName": { "Ref": "KeyName" },
         "SecurityGroups": [ { "Ref": "AppSecurityGroup" } ],

@@ -36,7 +36,6 @@
         template_parameters:
           VpcId: "{{ outputs.vpc.VpcId }}"
           AppSubnets: "{{ outputs.vpc.Subnets }}"
-          AppImageId: "ami-6869aa05"
           AppInstanceType: t2.nano
           DnsZone: demo.e-it.nz.
           KeyName: michael.ludvig
