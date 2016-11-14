@@ -21,7 +21,7 @@
     "AppHealthCheck": {
       "Type": "String",
       "Description": "Type of instance health check, e.g. 'HTTP:80/' or 'TCP:80'",
-      "Default": "HTTP:80/"
+      "Default": "TCP:80"
     },
     "AppInstanceType": {
       "Type": "String",
