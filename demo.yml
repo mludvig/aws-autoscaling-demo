@@ -36,7 +36,8 @@
         template_parameters:
           VpcId: "{{ outputs.vpc.VpcId }}"
           AppSubnets: "{{ outputs.vpc.Subnets }}"
-          AppInstanceType: t2.nano
+          AppInstanceType: t2.small
+          AppHealthCheck: HTTP:80/
           DnsZone: demo.e-it.nz.
           KeyName: michael.ludvig
           SshInCidr: 210.54.38.87/32
