@@ -42,6 +42,14 @@
       "Description": "The maximum size of the App autoscaling group",
       "Default": "15"
     },
+    "DeploymentBucket": {
+      "Type": "String",
+      "Description": "Deployment Bucket name"
+    },
+    "DeploymentKey": {
+      "Type": "String",
+      "Description": "Deployment Key name within the Bucket"
+    },
     "DnsZone": {
       "Type": "String",
       "Description": "DNS Zone for the Public resources",
@@ -388,7 +396,18 @@
       "Properties": {
         "ApplicationName": { "Ref": "AppApplication" },
         "AutoScalingGroups": [ { "Ref": "AppScalingGroup" } ],
-        "ServiceRoleArn": { "Fn::GetAtt" : [ "CodeDeployRole", "Arn" ] }
+        "ServiceRoleArn": { "Fn::GetAtt" : [ "CodeDeployRole", "Arn" ] },
+        "Deployment": {
+          "Revision": {
+            "RevisionType": "S3",
+            "S3Location": {
+              "Bucket": { "Ref": "DeploymentBucket" },
+              "Key": { "Ref": "DeploymentKey" },
+              "BundleType": "zip"
+            }
+          },
+          "IgnoreApplicationStopFailures": "true"
+        }
       }
     }
 

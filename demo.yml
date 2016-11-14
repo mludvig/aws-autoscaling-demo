@@ -37,6 +37,8 @@
           VpcId: "{{ outputs.vpc.VpcId }}"
           AppSubnets: "{{ outputs.vpc.Subnets }}"
           AppInstanceType: t2.small
+          DeploymentBucket: eitnz-codedeploy
+          DeploymentKey: demo-app.zip
           DnsZone: demo.e-it.nz.
           KeyName: michael.ludvig
           SshInCidr: 210.54.38.87/32
