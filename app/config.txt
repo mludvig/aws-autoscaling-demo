@@ -1,0 +1,3 @@
+STACK_REGEX='demo-app'
+STACK_OUTPUT="AppApplication"
+S3_URL="s3://eitnz-codedeploy/demo-app.zip"
