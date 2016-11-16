@@ -11,7 +11,7 @@ header("Expires: 0"); // Proxies.
 <body>
 <h1><?php echo "AWS AutoScaling Demo"; ?></h1>
 <p>
-<?php if($_SERVER["SERVER_ADDR"]) {?><h3>My IP is <?php echo $_SERVER["SERVER_ADDR"]; ?></h3><?php } ?>
+<?php if($_SERVER["SERVER_ADDR"]) {?><h3>Instance IP is <?php echo $_SERVER["SERVER_ADDR"]; ?></h3><?php } ?>
 </p>
 <p><a href="resize.php?image=earth-elevation.jpg&width=3000"/>Click to view a resized image</a><br/>
 (intentionally puts heavy load on the server to trigger autoscaling)</p>
