@@ -18,7 +18,7 @@
       cloudformation:
         stack_name: "{{ vpc_name }}-vpc"
         state: present
-        template: vpc-stack.json
+        template: vpc-stack.yml
         template_parameters:
           VpcCidr:  "{{ vpc_cidr }}"
           SubnetsCidrs: "{{ subnets_cidrs }}"
@@ -32,7 +32,7 @@
       cloudformation:
         stack_name: "{{ vpc_name }}-app"
         state: present
-        template: app-stack.json
+        template: app-stack.yml
         template_parameters:
           VpcId: "{{ outputs.vpc.VpcId }}"
           AppSubnets: "{{ outputs.vpc.Subnets }}"

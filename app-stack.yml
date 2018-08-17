@@ -1,0 +1,413 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: Demo Website Stack
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC Id of target VPC
+
+  AppSubnets:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: List of subnet IDs to use for the DMZ / Front End tier
+
+  AppPort:
+    Type: Number
+    Description: The TCP service port where the Application listens
+    Default: '80'
+    MinValue: '1'
+    MaxValue: '65535'
+    ConstraintDescription: You must specify a valid TCP port between 1 and 65535
+
+  AppHealthCheck:
+    Type: String
+    Description: Type of instance health check, e.g. 'HTTP:80/' or 'TCP:80'
+    Default: TCP:80
+
+  AppInstanceType:
+    Type: String
+    Description: ECS EC2 instance type
+    Default: t2.small
+    AllowedValues:
+      - t2.nano
+      - t2.micro
+      - t2.small
+      - t2.medium
+      - t2.large
+    ConstraintDescription: Must be a valid EC2 instance type (template restricts the
+      allowed values).
+
+  AppAsgMinSize:
+    Type: Number
+    Description: The maximum size of the App autoscaling group
+    Default: '3'
+
+  AppAsgMaxSize:
+    Type: Number
+    Description: The maximum size of the App autoscaling group
+    Default: '15'
+
+  DeploymentBucket:
+    Type: String
+    Description: Deployment Bucket name
+
+  DeploymentKey:
+    Type: String
+    Description: Deployment Key name within the Bucket
+
+  DnsZone:
+    Type: String
+    Description: DNS Zone for the Public resources
+    AllowedPattern: ^(?:.*)\.$
+    ConstraintDescription: The zone must end in a '.'
+
+  KeyName:
+    Type: AWS::EC2::KeyPair::KeyName
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the EC2 instances
+
+  SshInCidr:
+    Type: String
+    Description: Subnet CIDR whose members have SSH access to our instances, usually
+      Bastion Host
+
+Mappings:
+  RegionToAmi:
+    us-east-1:
+      hvm: ami-b73b63a0
+    us-east-2:
+      hvm: ami-58277d3d
+    us-west-1:
+      hvm: ami-23e8a343
+    us-west-2:
+      hvm: ami-5ec1673e
+    ap-south-1:
+      hvm: ami-34b4c05b
+    ap-northeast-2:
+      hvm: ami-983ce8f6
+    ap-southeast-1:
+      hvm: ami-b953f2da
+    ap-southeast-2:
+      hvm: ami-db704cb8
+    ap-northeast-1:
+      hvm: ami-0c11b26d
+    eu-central-1:
+      hvm: ami-f9619996
+    eu-west-1:
+      hvm: ami-9398d3e0
+    sa-east-1:
+      hvm: ami-97831ffb
+
+Resources:
+  AppApplication:
+    Type: AWS::CodeDeploy::Application
+    Properties:
+      ApplicationName: !Ref 'AWS::StackName'
+
+  CodeDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codedeploy.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+
+  CodeDeployRolePolicies:
+    Type: AWS::IAM::Policy
+    Properties:
+      Roles:
+        - !Ref 'CodeDeployRole'
+      PolicyDocument:
+        Statement:
+          - Resource:
+              - '*'
+            Effect: Allow
+            Action:
+              - ec2:Describe*
+          - Resource:
+              - '*'
+            Effect: Allow
+            Action:
+              - autoscaling:CompleteLifecycleAction
+              - autoscaling:DeleteLifecycleHook
+              - autoscaling:DescribeLifecycleHooks
+              - autoscaling:DescribeAutoScalingGroups
+              - autoscaling:PutLifecycleHook
+              - autoscaling:RecordLifecycleActionHeartbeat
+          - Resource:
+              - '*'
+            Effect: Allow
+            Action:
+              - Tag:getResources
+              - Tag:getTags
+              - Tag:getTagsForResource
+              - Tag:getTagsForResourceList
+      PolicyName: CodeDeployPolicy
+
+  ElbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Public ELB Security Group
+      VpcId: !Ref 'VpcId'
+      Tags:
+        - Key: Name
+          Value: !Ref 'AWS::StackName'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+
+  Elb:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Properties:
+      SecurityGroups:
+        - !Ref 'ElbSecurityGroup'
+      Tags:
+        - Key: Name
+          Value: !Ref 'AWS::StackName'
+      Subnets: !Ref 'AppSubnets'
+      CrossZone: 'true'
+      Listeners:
+        - LoadBalancerPort: 80
+          InstancePort: !Ref 'AppPort'
+          Protocol: HTTP
+      HealthCheck:
+        Target: !Ref 'AppHealthCheck'
+        HealthyThreshold: '2'
+        UnhealthyThreshold: '4'
+        Interval: '30'
+        Timeout: '2'
+
+  ElbHealthyCount:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Alarm if number of healthy instances is less than the minimum
+        ASG size
+      MetricName: HealthyHostCount
+      Namespace: AWS/ELB
+      Statistic: Average
+      Period: '60'
+      EvaluationPeriods: '3'
+      ComparisonOperator: LessThanThreshold
+      Threshold: !Ref 'AppAsgMinSize'
+      Dimensions:
+        - Name: LoadBalancerName
+          Value: !Ref 'Elb'
+
+  ElbDns:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      Comment: CNAME for App ELB
+      HostedZoneName: !Ref 'DnsZone'
+      Name: !Join
+        - .
+        - - !Ref 'AWS::StackName'
+          - !Ref 'DnsZone'
+      Type: A
+      AliasTarget:
+        HostedZoneId: !GetAtt 'Elb.CanonicalHostedZoneNameID'
+        DNSName: !GetAtt 'Elb.DNSName'
+
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: App Security Group
+      VpcId: !Ref 'VpcId'
+      Tags:
+        - Key: Name
+          Value: !Ref 'AWS::StackName'
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: !Ref 'AppPort'
+          ToPort: !Ref 'AppPort'
+          SourceSecurityGroupId: !Ref 'ElbSecurityGroup'
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref 'SshInCidr'
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+
+  AppInstanceLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !FindInMap
+        - RegionToAmi
+        - !Ref 'AWS::Region'
+        - hvm
+      InstanceType: !Ref 'AppInstanceType'
+      IamInstanceProfile: !Ref 'AppInstanceProfile'
+      KeyName: !Ref 'KeyName'
+      SecurityGroups:
+        - !Ref 'AppSecurityGroup'
+      UserData: !Base64
+        Fn::Join:
+          - ''
+          - - "#!/bin/bash -x\n"
+            - "echo === System configuration ===\n"
+            - echo 'export PS1="\u@\[\e[1m\]app\[\e[0m\].
+            - !Ref 'AWS::StackName'
+            - " \\w \\\\$ \"' >> /etc/profile.d/aws.sh\n"
+            - "echo === Create /opt/aws/aws-parameters.sh ===\n"
+            - "mkdir /opt/aws\n"
+            - "cat > /opt/aws/aws-parameters.sh << __EOF__\n"
+            - export _AWS_StackName=
+            - !Ref 'AWS::StackName'
+            - "\n"
+            - export _AWS_Region=
+            - !Ref 'AWS::Region'
+            - "\n"
+            - 'export _AWS_DnsZone=$(sed ''s/\.$//g'' <<< '
+            - !Ref 'DnsZone'
+            - ")\n"
+            - "__EOF__\n"
+            - "echo === CodeDeploy agent install ===\n"
+            - "yum -y install ruby\n"
+            - curl -L https://aws-codedeploy-
+            - !Ref 'AWS::Region'
+            - ".s3.amazonaws.com/latest/install -o /tmp/codedeploy-install\n"
+            - "chmod +x /tmp/codedeploy-install\n"
+            - "/tmp/codedeploy-install auto\n"
+            - "echo === Install Apache ===\n"
+            - "yum -y install httpd php php-gd\n"
+            - "sed -i 's/^memory_limit.*/memory_limit = 384M/g' /etc/php.ini\n"
+            - "chkconfig httpd on\n"
+            - "service httpd start\n"
+            - "echo === Done ===\n"
+            - "\n"
+
+  AppScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      VPCZoneIdentifier: !Ref 'AppSubnets'
+      LoadBalancerNames:
+        - !Ref 'Elb'
+      LaunchConfigurationName: !Ref 'AppInstanceLaunchConfig'
+      TerminationPolicies:
+        - OldestLaunchConfiguration
+        - OldestInstance
+      HealthCheckType: EC2
+      HealthCheckGracePeriod: 240
+      Cooldown: 30
+      MinSize: !Ref 'AppAsgMinSize'
+      MaxSize: !Ref 'AppAsgMaxSize'
+      Tags:
+        - Key: Name
+          Value: !Ref 'AWS::StackName'
+          PropagateAtLaunch: 'true'
+
+  AppServerScaleUpPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref 'AppScalingGroup'
+      Cooldown: '60'
+      ScalingAdjustment: '1'
+
+  AppServerScaleDownPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref 'AppScalingGroup'
+      Cooldown: '60'
+      ScalingAdjustment: '-1'
+
+  AppCpuAlarmHigh:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Scale-up if CPU > 50% for 2 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: '60'
+      EvaluationPeriods: '2'
+      Threshold: '50'
+      AlarmActions:
+        - !Ref 'AppServerScaleUpPolicy'
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref 'AppScalingGroup'
+      ComparisonOperator: GreaterThanThreshold
+
+  AppCpuAlarmLow:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Scale-down if CPU < 50% for 2 minutes
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: '60'
+      EvaluationPeriods: '2'
+      Threshold: '50'
+      AlarmActions:
+        - !Ref 'AppServerScaleDownPolicy'
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref 'AppScalingGroup'
+      ComparisonOperator: LessThanThreshold
+
+  AppInstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ec2.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+
+  AppInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: /
+      Roles:
+        - !Ref 'AppInstanceRole'
+
+  AppDeploymentGroup:
+    Type: AWS::CodeDeploy::DeploymentGroup
+    Properties:
+      ApplicationName: !Ref 'AppApplication'
+      AutoScalingGroups:
+        - !Ref 'AppScalingGroup'
+      ServiceRoleArn: !GetAtt 'CodeDeployRole.Arn'
+      Deployment:
+        Revision:
+          RevisionType: S3
+          S3Location:
+            Bucket: !Ref 'DeploymentBucket'
+            Key: !Ref 'DeploymentKey'
+            BundleType: zip
+        IgnoreApplicationStopFailures: 'true'
+
+Outputs:
+  ElbCanonicalName:
+    Description: App ELB canonical name
+    Value: !GetAtt 'Elb.DNSName'
+
+  ElbDnsName:
+    Description: App ELB DNS Name (Public URL HostName)
+    Value: !Ref 'ElbDns'
+
+  AppApplication:
+    Description: App CodeDeploy Application Name
+    Value: !Ref 'AppApplication'
+
+  AppDeploymentGroup:
+    Description: App CodeDeploy DeploymentGroup Name
+    Value: !Ref 'AppDeploymentGroup'

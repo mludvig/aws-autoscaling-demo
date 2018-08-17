@@ -1,0 +1,150 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: Simple VPC Template
+
+Parameters:
+  VpcCidr:
+    Type: String
+    Description: VPC CIDR Address
+    AllowedPattern: ^(?:\d{1,3})\.(?:\d{1,3})\.(?:\d{1,3})\.(?:\d{1,3})/(?:\d{1,2})$
+    ConstraintDescription: IP address must be in the format x.x.x.x/xx
+
+  SubnetsCidrs:
+    Type: CommaDelimitedList
+    Description: Subnet addresses for 3 Availability Zones
+
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref 'VpcCidr'
+      EnableDnsHostnames: 'true'
+      Tags:
+        - Key: Name
+          Value: !Ref 'AWS::StackName'
+
+  RouteTableSubnets:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref 'Vpc'
+      Tags:
+        - Key: Name
+          Value: !Ref 'AWS::StackName'
+
+  SubnetAz1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref 'Vpc'
+      CidrBlock: !Select
+        - '0'
+        - !Ref 'SubnetsCidrs'
+      AvailabilityZone: !Select
+        - '0'
+        - !GetAZs ''
+      MapPublicIpOnLaunch: 'true'
+      Tags:
+        - Key: Name
+          Value: !Join
+            - ''
+            - - !Ref 'AWS::StackName'
+              - -az1
+
+  SubnetAz1Rta:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref 'RouteTableSubnets'
+      SubnetId: !Ref 'SubnetAz1'
+
+  SubnetAz2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref 'Vpc'
+      CidrBlock: !Select
+        - '1'
+        - !Ref 'SubnetsCidrs'
+      AvailabilityZone: !Select
+        - '1'
+        - !GetAZs ''
+      MapPublicIpOnLaunch: 'true'
+      Tags:
+        - Key: Name
+          Value: !Join
+            - ''
+            - - !Ref 'AWS::StackName'
+              - -az2
+
+  SubnetAz2Rta:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref 'RouteTableSubnets'
+      SubnetId: !Ref 'SubnetAz2'
+
+  SubnetAz3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref 'Vpc'
+      CidrBlock: !Select
+        - '2'
+        - !Ref 'SubnetsCidrs'
+      AvailabilityZone: !Select
+        - '2'
+        - !GetAZs ''
+      MapPublicIpOnLaunch: 'true'
+      Tags:
+        - Key: Name
+          Value: !Join
+            - ''
+            - - !Ref 'AWS::StackName'
+              - -az3
+
+  SubnetAz3Rta:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref 'RouteTableSubnets'
+      SubnetId: !Ref 'SubnetAz3'
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Ref 'AWS::StackName'
+
+  IgwRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref 'RouteTableSubnets'
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref 'InternetGateway'
+
+  VpcGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref 'InternetGateway'
+      VpcId: !Ref 'Vpc'
+
+  S3Endpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      RouteTableIds:
+        - !Ref 'RouteTableSubnets'
+      ServiceName: !Join
+        - ''
+        - - com.amazonaws.
+          - !Ref 'AWS::Region'
+          - .s3
+      VpcId: !Ref 'Vpc'
+
+Outputs:
+  VpcId:
+    Value: !Ref 'Vpc'
+
+  VpcCidr:
+    Value: !GetAtt 'Vpc.CidrBlock'
+
+  Subnets:
+    Value: !Join
+      - ','
+      - - !Ref 'SubnetAz1'
+        - !Ref 'SubnetAz2'
+        - !Ref 'SubnetAz3'
